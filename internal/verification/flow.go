@@ -24,6 +24,7 @@ import (
 // MUST have declared a policy and a negative control for a CONFIRMED path —
 // anything less downgrades (fail-closed).
 func (e *Engine) VerifyBusinessFlow(ctx context.Context, fl *workflow.Flow, ownerRun *workflow.RunResult, attackerRuns []*workflow.RunResult) *finding.Finding {
+	e.stats.attempts.Add(1)
 	attacker := ""
 	if len(attackerRuns) > 0 {
 		attacker = attackerRuns[0].Profile

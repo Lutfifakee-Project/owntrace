@@ -400,6 +400,31 @@ func (d *DB) SaveFinding(f *finding.Finding) error {
 	return err
 }
 
+// CountFindingsByState returns the persisted finding cardinality per state
+// for a session. This is the SINGLE SOURCE OF TRUTH for state counts: the
+// scan summary, report.json, results list and session persistence must all
+// agree with these numbers — event-level duplicates (multiple role-matrix
+// attackers producing one upserted row) must never inflate displayed counts.
+func (d *DB) CountFindingsByState(sessionID string) (map[string]int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	rows, err := d.db.Query(`SELECT state, COUNT(*) FROM findings WHERE session_id = ? GROUP BY state`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var st string
+		var n int
+		if err := rows.Scan(&st, &n); err != nil {
+			return nil, err
+		}
+		out[st] = n
+	}
+	return out, rows.Err()
+}
+
 // ListFindings returns findings for a session, optionally filtered by state.
 func (d *DB) ListFindings(sessionID string, state string) ([]*finding.Finding, error) {
 	d.mu.Lock()

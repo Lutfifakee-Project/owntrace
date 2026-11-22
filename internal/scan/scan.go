@@ -232,12 +232,10 @@ func (r *Runner) Run(ctx context.Context, dryRun bool) (*Summary, error) {
 					if findingsBudgetExhausted(sum, r.Cfg.Verification) {
 						break
 					}
-					f := r.Verif.VerifyVerticalPair(ctx, u, ep.Method, ep, admin, attacker)
-					// vertical loop runs sequentially before the worker pool
-					sum.ChecksExecuted++
-					if f != nil {
-						sum.Findings[string(f.State)]++
-					}
+					// Coverage and finding accounting happen at finalization,
+					// from engine stats and persisted rows (single source of
+					// truth) — never as per-event counters here.
+					r.Verif.VerifyVerticalPair(ctx, u, ep.Method, ep, admin, attacker)
 				}
 			}
 		}
@@ -262,18 +260,10 @@ func (r *Runner) Run(ctx context.Context, dryRun bool) (*Summary, error) {
 				if over || ctx.Err() != nil {
 					continue
 				}
-				f := r.Verif.VerifyItem(ctx, it)
-				mu.Lock()
-				sum.ChecksExecuted++
-				sum.Findings[string(f.State)]++
-				mu.Unlock()
+				r.Verif.VerifyItem(ctx, it)
 				// anonymous follow-up test
 				if r.Cfg.Verification.AnonymousTest && it.Owner != auth.AnonymousProfile && ctx.Err() == nil {
-					af := r.Verif.VerifyAnonymous(ctx, it)
-					mu.Lock()
-					sum.ChecksExecuted++
-					sum.Findings[string(af.State)]++
-					mu.Unlock()
+					r.Verif.VerifyAnonymous(ctx, it)
 				}
 			}
 		}()
@@ -303,6 +293,29 @@ func (r *Runner) Run(ctx context.Context, dryRun bool) (*Summary, error) {
 	// business-flow verification battery (§29).
 	if len(r.Cfg.Workflows.Files) > 0 {
 		r.runBusinessFlows(ctx, sessionID, sum)
+	}
+
+	// ---- coverage & finding accounting (§33): persisted rows are the single
+	// source of truth. The CLI summary must equal report.json, results list
+	// and the session's stored findings; duplicate finding EVENTS (e.g. a
+	// role-matrix battery against several attackers producing ONE upserted
+	// finding row) are never counted as multiple findings. A check refused
+	// by the safety guards before its first request is safety-skipped, not
+	// executed.
+	blocked := r.Verif.ChecksSafetyBlocked()
+	sum.ChecksExecuted = int(r.Verif.ChecksAttempted() - blocked)
+	sum.SafetySkipped = int(blocked)
+	states, cerr := r.DB.CountFindingsByState(sessionID)
+	if cerr != nil {
+		r.Log.Warnf("count findings by state: %v", cerr)
+		states = map[string]int{}
+	}
+	sum.Findings = states
+	if extra := r.Verif.SafetyBlockedRequests() - blocked; extra > 0 {
+		sum.Notes = append(sum.Notes, fmt.Sprintf("%d additional request(s) inside executed checks were safety-blocked before sending", extra))
+	}
+	if gap := sum.ChecksPlanned - sum.ChecksExecuted - sum.SafetySkipped; gap > 0 {
+		sum.Notes = append(sum.Notes, fmt.Sprintf("%d planned check(s) were not run (budget exhausted or scan cancelled)", gap))
 	}
 
 	// ---- finish ----

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Lutfifakee-Project/owntrace/internal/auth"
@@ -52,7 +53,33 @@ type Engine struct {
 	Cfg     config.Verification
 	Log     *logger.Logger
 	Session string
+
+	// stats carries authorization-coverage accounting (§33). Every Verify*
+	// battery increments attempts; batteries refused entirely by the safety
+	// guards before their first request increment blockedChecks. The scan
+	// summary derives ChecksExecuted/SafetySkipped from these counters, so a
+	// request prevented before execution is never counted as executed.
+	stats engineStats
 }
+
+// engineStats is the concurrency-safe coverage-accounting accumulator.
+type engineStats struct {
+	attempts      atomic.Int64 // verification batteries started
+	blockedChecks atomic.Int64 // batteries with EVERY request safety-refused
+	blockedReqs   atomic.Int64 // individual requests safety-refused (incl. partial)
+}
+
+// ChecksAttempted returns the number of verification batteries started.
+func (e *Engine) ChecksAttempted() int64 { return e.stats.attempts.Load() }
+
+// ChecksSafetyBlocked returns the number of batteries the safety guards
+// refused entirely (no request of that check was ever executed).
+func (e *Engine) ChecksSafetyBlocked() int64 { return e.stats.blockedChecks.Load() }
+
+// SafetyBlockedRequests returns the number of individual requests the safety
+// guards prevented before execution, including extra requests inside
+// otherwise-executed checks.
+func (e *Engine) SafetyBlockedRequests() int64 { return e.stats.blockedReqs.Load() }
 
 // TestItem is one authorization test coordinate.
 type TestItem struct {
@@ -147,6 +174,9 @@ func (e *Engine) request(ctx context.Context, profile, rawURL, method string, it
 		}
 	}
 	x := e.Client.Do(ctx, method, rawURL, opts)
+	if x != nil && x.SafetyBlocked {
+		e.stats.blockedReqs.Add(1)
+	}
 	res := wireResult{x: x}
 	if x != nil {
 		rec, cerr := e.Evid.CaptureExchange("", e.Session, x, evTitle)
@@ -204,6 +234,7 @@ func (b *battery) noteEvidenceLoss(err error) {
 // finding. It always produces a finding (any terminal state), routed through
 // the central confirmation policy.
 func (e *Engine) VerifyItem(ctx context.Context, item TestItem) *finding.Finding {
+	e.stats.attempts.Add(1)
 	title := fmt.Sprintf("%s access to %s '%s' owned by %s",
 		categoryLabel(item.Category), item.Resource, item.RedactedID(), item.Owner)
 	f := e.newFinding(item, title)
@@ -249,6 +280,11 @@ func (e *Engine) VerifyItem(ctx context.Context, item TestItem) *finding.Finding
 		bat.noteEvidenceLoss(ownerRes.evErr)
 	}
 	ownerX := ownerRes.x
+	if e.baselineSafetyBlocked(ownerRes) {
+		e.finish(f, finding.StateInconclusive, 0,
+			"safety guard refused every request for this check (deny-by-default destructive-path/scope policy): "+wireErrText(ownerRes), ownerRes.evID)
+		return f
+	}
 	if ownerRes.reqErr != nil || !ownerX.Succeeded() {
 		e.finish(f, finding.StateInconclusive, 0,
 			"owner baseline request failed ("+wireErrText(ownerRes)+") — cannot establish any comparison baseline", ownerRes.evID)
@@ -472,6 +508,7 @@ func (e *Engine) cacheAnalysis(ctx context.Context, item TestItem, attacker stri
 // separation holds without probes; every other mandatory control — negative
 // control, cache analysis, repeatability, evidence — still gates CONFIRMED.
 func (e *Engine) VerifyAnonymous(ctx context.Context, item TestItem) *finding.Finding {
+	e.stats.attempts.Add(1)
 	anonItem := item
 	anonItem.Category = finding.CatAnonymous
 	anonItem.Owner = item.Owner
@@ -493,6 +530,11 @@ func (e *Engine) VerifyAnonymous(ctx context.Context, item TestItem) *finding.Fi
 		bat.noteEvidenceLoss(ownerRes.evErr)
 	}
 	ownerX := ownerRes.x
+	if e.baselineSafetyBlocked(ownerRes) {
+		e.finish(f, finding.StateInconclusive, 0,
+			"safety guard refused every request for this check (deny-by-default destructive-path/scope policy): "+wireErrText(ownerRes), ownerRes.evID)
+		return f
+	}
 	if !ownerX.Succeeded() || !containsIdentifier(ownerX.Body, item.Identifier) || classifyDenial(ownerX.Status, ownerX.Body) != denialNone {
 		e.finish(f, finding.StateInconclusive, 0, "owner baseline failed or did not return the object; anonymous comparison meaningless", ownerRes.evID)
 		return f
@@ -630,6 +672,7 @@ func (e *Engine) VerifyVerticalPair(ctx context.Context, rawURL, method string, 
 }
 
 func (e *Engine) verifyVerticalPair(ctx context.Context, rawURL, method string, ep *endpoints.Endpoint, admin, attacker string) *finding.Finding {
+	e.stats.attempts.Add(1)
 	// Function-level authorization testing (§24 BFLA): the endpoint itself is
 	// the protected function; no owned object is involved. The finding type
 	// is therefore broken_function_level_authorization, distinct from
@@ -671,6 +714,11 @@ func (e *Engine) verifyVerticalPair(ctx context.Context, rawURL, method string, 
 		bat.noteEvidenceLoss(adminRes.evErr)
 	}
 	adminX := adminRes.x
+	if e.baselineSafetyBlocked(adminRes) {
+		e.finish(f, finding.StateInconclusive, 0,
+			"safety guard refused every request for this check (deny-by-default destructive-path/scope policy): "+wireErrText(adminRes), adminRes.evID)
+		return f
+	}
 	if !adminX.Succeeded() || classifyDenial(adminX.Status, adminX.Body) != denialNone || adminX.Status == 404 || len(strings.TrimSpace(adminX.Body)) == 0 {
 		e.finish(f, finding.StateInconclusive, 0,
 			fmt.Sprintf("role baseline failed (HTTP %d) — cannot establish privileged behavior", adminX.Status), adminRes.evID)

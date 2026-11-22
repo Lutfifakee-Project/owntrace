@@ -210,6 +210,18 @@ func (e *Engine) persist(f *finding.Finding) {
 	}
 }
 
+// baselineSafetyBlocked reports whether the check's FIRST request was refused
+// by the safety guards before execution (deny-by-default scope/destructive
+// policy). Such a check is accounted as safety-skipped — never executed —
+// and it can never reach CONFIRMED because no control ran at all.
+func (e *Engine) baselineSafetyBlocked(res wireResult) bool {
+	if res.x != nil && res.x.SafetyBlocked {
+		e.stats.blockedChecks.Add(1)
+		return true
+	}
+	return false
+}
+
 // captureVerification persists a verification-step record; errors are not
 // fatal here (the identity result itself is already recorded as a control),
 // but the evidence loss is logged.

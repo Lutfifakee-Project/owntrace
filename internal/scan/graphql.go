@@ -48,11 +48,7 @@ func (r *Runner) runGraphQL(ctx context.Context, sessionID string, reg *ownershi
 				Category:   category,
 				EndpointID: "graphql",
 			}
-			f := r.Verif.VerifyGraphQL(ctx, op, item)
-			sum.ChecksExecuted++
-			if f != nil {
-				sum.Findings[string(f.State)]++
-			}
+			r.Verif.VerifyGraphQL(ctx, op, item)
 		}
 		if !matched {
 			sum.Notes = append(sum.Notes, fmt.Sprintf(

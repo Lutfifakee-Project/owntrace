@@ -123,11 +123,7 @@ func (r *Runner) runBusinessFlows(ctx context.Context, sessionID string, sum *Su
 				sum.Notes = append(sum.Notes, fmt.Sprintf("business flow %s: unauthorized execution refused by scope — flow not testable as %s", fl.Name, attacker))
 				continue
 			}
-			fnd := r.Verif.VerifyBusinessFlow(ctx, fl, ownerRun, attackerRuns)
-			sum.ChecksExecuted++
-			if fnd != nil {
-				sum.Findings[string(fnd.State)]++
-			}
+			r.Verif.VerifyBusinessFlow(ctx, fl, ownerRun, attackerRuns)
 		}
 	}
 }

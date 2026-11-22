@@ -100,7 +100,9 @@ forbidden="$(find "$STAGE/owntrace" \
        -o -path '*/.toolchain/*' -o -path '*/.git/*' \
        -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.tgz' \
        -o -name '*.db' -o -name '*.db-shm' -o -name '*.db-wal' \
-       -o -name '*.log' -o -name '*.tmp' -o -name '*.swp' \) -print -quit)"
+       -o -name '*.log' -o -name '*.tmp' -o -name '*.swp' \
+       -o -name 'FINAL-REPORT*.md' -o -name 'RELEASE-NOTES*.md' \
+       -o -name 'acceptance-matrix.md' -o -name 'milestones.md' \) -print -quit)"
 [ -z "$forbidden" ] || fail "forbidden generated artifact staged: $forbidden"
 
 big="$(find "$STAGE/owntrace" -type f -size +10M -print -quit)"
@@ -184,7 +186,7 @@ diff <(printf '%s\n' "$ZIP_LIST" | LC_ALL=C sort) \
     || fail "zip and tar logical inventories differ"
 
 bad_entries="$(printf '%s\n' "$ZIP_LIST" | grep -E \
-    '(^|/)(download|release-gates|audit-archive|dist|owntrace-data|sec-data|\.toolchain|\.git|tmp)(/|$)|\.(zip|tar\.gz|tgz|db|db-shm|db-wal|log|tmp|swp)$' || true)"
+    '(^|/)(download|release-gates|audit-archive|dist|owntrace-data|sec-data|\.toolchain|\.git|tmp)(/|$)|\.(zip|tar\.gz|tgz|db|db-shm|db-wal|log|tmp|swp)$|FINAL-REPORT|RELEASE-NOTES|acceptance-matrix\.md|(^|/)milestones\.md' || true)"
 [ -z "$bad_entries" ] || fail "forbidden entries in archive: $bad_entries"
 
 self_entry="$(printf '%s\n' "$ZIP_LIST" | grep -F "owntrace-${VERSION}-source" || true)"

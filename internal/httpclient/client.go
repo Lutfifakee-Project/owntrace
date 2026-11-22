@@ -48,12 +48,17 @@ type Exchange struct {
 	// RawBody is the unredacted, size-bounded response body. In-memory only
 	// (never serialized): consumed by the workflow engine for exact value
 	// extraction; evidence and reports use the redacted Body.
-	RawBody       string    `json:"-"`
-	BodyTruncated bool      `json:"body_truncated,omitempty"`
-	BodyLen       int       `json:"body_len"`            // pre-redaction length
-	FinalURL      string    `json:"final_url,omitempty"` // redacted
-	Redirects     []Hop     `json:"redirects,omitempty"`
-	ScopeBlocked  bool      `json:"scope_blocked,omitempty"` // a redirect hop left scope
+	RawBody       string `json:"-"`
+	BodyTruncated bool   `json:"body_truncated,omitempty"`
+	BodyLen       int    `json:"body_len"`            // pre-redaction length
+	FinalURL      string `json:"final_url,omitempty"` // redacted
+	Redirects     []Hop  `json:"redirects,omitempty"`
+	ScopeBlocked  bool   `json:"scope_blocked,omitempty"` // a redirect hop left scope
+	// SafetyBlocked marks an exchange whose request was refused by the safety
+	// guards BEFORE it was sent (destructive-path denylist, out-of-scope
+	// deny-by-default, or a write-method refusal). Coverage accounting must
+	// never count such an exchange as executed.
+	SafetyBlocked bool      `json:"safety_blocked,omitempty"`
 	DurationMs    int64     `json:"duration_ms"`
 	Err           string    `json:"error,omitempty"`
 	At            time.Time `json:"at"`
@@ -183,6 +188,7 @@ func (c *Client) Do(ctx context.Context, method, rawURL string, opts Options) *E
 		single := c.doSingle(ctx, method, current, opts, x)
 		if !single.Succeeded() {
 			x.Err = single.Err
+			x.SafetyBlocked = single.SafetyBlocked
 			x.DurationMs = time.Since(start).Milliseconds()
 			x.Redirects = hops
 			return x
@@ -211,6 +217,7 @@ func (c *Client) Do(ctx context.Context, method, rawURL string, opts Options) *E
 		hops = append(hops, hopRec)
 		if !d.Allowed {
 			x.ScopeBlocked = true
+			x.SafetyBlocked = true
 			c.log.Warnf("redirect to out-of-scope %s blocked (%s)", redact.URL(next.String()), d.Reason)
 			break
 		}
@@ -239,7 +246,13 @@ func (c *Client) doSingle(ctx context.Context, method, rawURL string, opts Optio
 			}
 		}
 		if err := c.safety.Reserve(ctx, method, rawURL); err != nil {
-			return errExchange(parent, method, rawURL, err.Error())
+			x := errExchange(parent, method, rawURL, err.Error())
+			// Refusals by the safety policy happened BEFORE any wire activity:
+			// they are safety-skips, never executed requests.
+			if errors.Is(err, safety.ErrOutOfScope) || errors.Is(err, safety.ErrMethodNotAllowed) {
+				x.SafetyBlocked = true
+			}
+			return x
 		}
 		res, err := c.attempt(ctx, method, rawURL, opts)
 		c.safety.Release()

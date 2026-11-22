@@ -5,11 +5,13 @@ import "runtime"
 
 // Version follows semantic versioning vMAJOR.MINOR.PATCH.
 //
-// 0.1.0 is the FIRST complete product release, designated by the project
-// owner (2026-11-21). The development lifecycle used internal milestone
-// gates (v0.2.0–v1.0.0) for traceability; their artifacts remain preserved
-// as history, and every mandatory capability ships in this initial release.
-const Version = "0.1.0"
+// 0.1.1 is the first patch release on top of the owner-designated 0.1.0
+// initial release. It corrects finding-accounting and safety-coverage
+// reporting only: persisted state counts are the single source of truth for
+// every displayed total, and checks refused by the safety guards before
+// execution are reported as safety-skipped instead of executed. No
+// verification, confirmation or safety policy changed.
+const Version = "0.1.1"
 
 // Commit is injected at build time with -ldflags; "dev" in source builds.
 var Commit = "dev"

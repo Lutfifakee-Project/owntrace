@@ -23,6 +23,7 @@ import (
 // owner is the owning profile, attacker the non-owner; identifier is the
 // object identifier the operation addresses (inline or via variables).
 func (e *Engine) VerifyGraphQL(ctx context.Context, op graphql.Operation, item TestItem) *finding.Finding {
+	e.stats.attempts.Add(1)
 	if item.Category == "" {
 		item.Category = "horizontal_object_access"
 	}

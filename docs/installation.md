@@ -16,7 +16,7 @@ go build -trimpath \
   -ldflags "-s -w -X github.com/Lutfifakee-Project/owntrace/internal/version.Commit=$(git rev-parse --short HEAD)" \
   -o owntrace ./cmd/owntrace
 ./owntrace version
-# OWNTRACE 0.1.0 (<commit>, linux/amd64, go1.27.4)
+# OWNTRACE 0.1.1 (<commit>, linux/amd64, go1.27.4)
 ```
 
 `-trimpath` removes local paths from the binary; the `-ldflags` stamp records

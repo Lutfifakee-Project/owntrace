@@ -4,6 +4,45 @@ All notable changes to OWNTRACE are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — Patch Release (2026-11-22)
+
+A reporting-correctness release. No verification, confirmation, ownership or
+safety policy changed; every existing security invariant is preserved and
+covered by new regression tests.
+
+### Fixed
+- **Consistent finding accounting.** The scan summary previously counted
+  finding *events*; a role-matrix battery testing one privileged endpoint
+  against several profiles produced one finding row but was counted once per
+  profile, so the CLI summary could disagree with the JSON report and the
+  results list. State counts now come from the persisted database rows at
+  scan finalization — the CLI summary, JSON report, `results list` and the
+  stored session cardinality always agree, and totals equal the actual
+  number of persisted findings.
+- **Accurate safety-skipped coverage.** A check refused by the destructive-
+  path guard BEFORE its first request was counted as executed ("N/N executed,
+  0 safety-skipped"). Such checks are now reported as safety-skipped, never
+  executed; the finding carries an explicit safety-refusal reason; and the
+  coverage line satisfies executed + safety-skipped (+ any budget/cancelled
+  remainder) = planned.
+
+### Changed
+- Findings refused by a safety guard persist as INCONCLUSIVE with an explicit
+  "safety guard refused every request" reason instead of a generic request
+  failure message.
+
+### Security
+- The deny-by-default destructive-path guard is unchanged and remains
+  method-agnostic: read-only GET requests whose path matches a destructive
+  pattern are still refused before execution. This conservative behavior is
+  now accurately represented in coverage instead of being hidden.
+
+### Added
+- Regression tests: summary/report/results/database accounting consistency
+  and finding cardinality; safety-skipped coverage accounting; read-only GET
+  requests matching destructive-path patterns; duplicate role-matrix events
+  staying one persisted row; persisted state counts matching row cardinality.
+
 ## [0.1.0] — Initial Release (owner-designated, 2026-11-21)
 
 The first complete public release of OWNTRACE, per the project owner's
@@ -15,8 +54,7 @@ race and cross-platform builds).
 
 Everything listed under the historical internal milestones below ships in
 this release. The internal milestone gates (v0.2.0–v1.0.0) were development
-traceability checkpoints, not published releases; their artifacts are
-preserved under `download/release-gates/` as historical records.
+traceability checkpoints, not published releases.
 
 ### Highlights of the initial release
 - CLI-first, offline, single-command assessment:
@@ -45,7 +83,7 @@ preserved under `download/release-gates/` as historical records.
 ### Historical note on internal version milestones
 The sections below record the development milestone gates truthfully. The
 former v1.0.0 internal gate is superseded by this owner-designated v0.1.0
-initial release; its artifacts are retained unchanged for audit history.
+initial release.
 
 ## [1.0.0] — Internal Milestone Gate: Mature Stable Release (historical)
 
@@ -121,16 +159,15 @@ nothing was removed; all verdict discipline from v0.2.0+ is preserved.
 - Performance benchmarks recorded for redaction, similarity, hashing and
   scope checks.
 
-### v1.0.0 acceptance gate (§14)
-All 16 acceptance conditions verified with executed commands and stored
-artifacts; see `FINAL-REPORT.md` (traceability matrix, defect ledger,
-security verification, test results, limitations, verdict).
+### v1.0.0 acceptance gate
+All 16 acceptance conditions were verified with executed commands and stored
+artifacts (traceability matrix, defect ledger, security verification, test
+results, limitations).
 
 ## [0.6.0] — Authentication & Ownership Intelligence, Safety Hardening, Coverage
 
 (Contains the completed scopes of milestones v0.3.0–v0.6.0; boundaries were
-consolidated because the scopes landed in one development window — see
-docs/milestones.md.)
+consolidated because the scopes landed in one development window.)
 
 ### Added — v0.3.0 Authentication & Ownership Intelligence
 - Direct mapper tests: declared mappings, controlled creation workflows
