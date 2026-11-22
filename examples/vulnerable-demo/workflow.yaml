@@ -1,0 +1,51 @@
+# OWNTRACE application workflow (§25) — deliberately vulnerable laboratory
+# flow. Loosely coupled to the bundled mockapp; loopback-only test data.
+#
+# The flow creates a draft document, then approves it. The declared policy
+# ("approval restricted to approver/admin roles") is NOT enforced by the lab:
+# any authenticated principal completes the flow, which the business-flow
+# battery must catch as a sensitive_business_flow_bypass finding.
+version: 1
+description: Vulnerable document approval flow
+flows:
+  - name: doc-approval
+    description: Create a draft document and approve it
+    owner_profile: alice
+    resource: workflow_doc
+    policy: "approval restricted to approver/admin roles"
+    steps:
+      - name: csrf
+        method: POST
+        url: "{{base}}/api/v1/workflows/csrf"
+        extract:
+          csrf: {from: json, path: "token"}
+      - name: create-doc
+        method: POST
+        url: "{{base}}/api/v1/workflows/docs"
+        headers:
+          X-Flow-Token: "{{csrf}}"
+        body: '{"title":"owntrace-{{random}}"}'
+        expect: {status: 201}
+        extract:
+          doc_id: {from: json, path: "document.id"}
+      - name: read-doc
+        method: GET
+        url: "{{base}}/api/v1/workflows/docs/{{doc_id}}"
+        expect: {status: 200}
+      - name: approve-doc
+        method: POST
+        url: "{{base}}/api/v1/workflows/docs/{{doc_id}}/approve"
+        headers:
+          X-Flow-Token: "{{csrf}}"
+        expect: {status: 200}
+    # Negative control: approving a NONEXISTENT document must be denied
+    # (HTTP 404). If the lab approved it, the flow surface is a decoy.
+    negative_control:
+      name: approve-nonexistent
+      method: POST
+      url: "{{base}}/api/v1/workflows/docs/ot-neg-{{random}}/approve"
+      headers:
+        X-Flow-Token: "{{csrf}}"
+    # Optional cleanup (owner-only DELETE) — omitted here so the created
+    # document stays alive for the object-level battery within the same
+    # scan; see docs/cross-account-testing.md for cleanup semantics.

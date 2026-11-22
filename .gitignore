@@ -1,0 +1,18 @@
+# OWNTRACE secrets — never commit
+auth.yaml
+auth.*.yaml
+!auth.yaml.example
+
+# Build artifacts (root-anchored: the compiled binary at the tree root.
+# An unanchored "owntrace" also matches cmd/owntrace/ and would silently
+# exclude the main package from version control.)
+/owntrace
+/owntrace.exe
+
+# Local scan data
+owntrace-data/
+sec-data/
+*.db
+*.db-shm
+*.db-wal
+*.log

@@ -1,0 +1,193 @@
+# Manual cross-platform release artifact builder (workflow_dispatch only).
+#
+# Scope of this workflow is deliberately narrow: build and verify artifacts.
+# Publishing — GitHub Release creation, tag pushing, any public publication —
+# is intentionally NOT automated here; the project owner performs every
+# GitHub publication step by hand (see PUBLICATION-HANDOFF.md).
+#
+# Provenance honesty: binaries are built with -buildvcs=false so buildinfo
+# never claims a VCS commit; the checked-out commit is instead carried in
+# the version string via ldflags (release-build-<short-sha>).
+name: release-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (strict semver, must equal internal/version.Version, e.g. 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build, verify, package (5 platforms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Validate version input
+        id: validate
+        run: |
+          set -euo pipefail
+          case "$VERSION" in
+            "") echo "::error::version input is empty" ; exit 1 ;;
+          esac
+          if [ "${#VERSION}" -gt 32 ]; then
+            echo "::error::version input too long" ; exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version '$VERSION' is not strict semver (MAJOR.MINOR.PATCH, digits only)"
+            exit 1
+          fi
+          echo "version accepted: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Verify source tree declares the requested version
+        run: |
+          set -euo pipefail
+          src_version=$(grep -E 'const Version = "' ./internal/version/version.go \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "internal/version.Version = $src_version ; requested = $VERSION"
+          if [ "$src_version" != "$VERSION" ]; then
+            echo "::error::requested version does not match the source version constant"
+            exit 1
+          fi
+
+      - name: Set up Go (toolchain from go.mod)
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build five platform binaries (-buildvcs=false)
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse --short HEAD)
+          echo "building from commit $commit"
+          mkdir -p dist
+          LDFLAGS="-s -w -X github.com/Lutfifakee-Project/owntrace/internal/version.Commit=release-build-${commit}"
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            GOOS="${target%/*}"; GOARCH="${target#*/}"; ext=""
+            [ "$GOOS" = windows ] && ext=.exe
+            name="owntrace-${VERSION}-${GOOS}-${GOARCH}${ext}"
+            env GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED=0 \
+              go build -trimpath -buildvcs=false -ldflags "$LDFLAGS" -o "dist/$name" ./cmd/owntrace
+            echo "built $name"
+          done
+
+      - name: Verify binary version and platform metadata
+        run: |
+          set -euo pipefail
+          fail=0
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            GOOS="${target%/*}"; GOARCH="${target#*/}"; ext=""
+            [ "$GOOS" = windows ] && ext=.exe
+            name="dist/owntrace-${VERSION}-${GOOS}-${GOARCH}${ext}"
+            test -s "$name" || { echo "::error::$name missing or empty" ; fail=1 ; continue ; }
+            meta=$(go version -m "$name")
+            # GOOS/GOARCH in buildinfo must match the target encoded in the filename
+            printf '%s\n' "$meta" | grep -qE "[[:space:]]GOOS=${GOOS}$" \
+              || { echo "::error::$name: GOOS mismatch" ; fail=1 ; }
+            printf '%s\n' "$meta" | grep -qE "[[:space:]]GOARCH=${GOARCH}$" \
+              || { echo "::error::$name: GOARCH mismatch" ; fail=1 ; }
+            # buildinfo must not claim any VCS commit
+            if printf '%s\n' "$meta" | grep -qi 'vcs='; then
+              echo "::error::$name: VCS metadata present" ; fail=1
+            fi
+            # provenance marker carried honestly via ldflags; the -X-injected
+            # string is embedded in the binary (go version -m does not echo
+            # ldflags), so search the binary itself
+            grep -aqF 'release-build-' "$name" \
+              || { echo "::error::$name: commit marker missing" ; fail=1 ; }
+            # object format sanity
+            file "$name" | grep -qE 'ELF|Mach-O|PE32\+' \
+              || { echo "::error::$name: unexpected object format" ; fail=1 ; }
+          done
+          # executable check on the host platform only (runner = linux/amd64)
+          out=$(./dist/owntrace-"$VERSION"-linux-amd64 version)
+          echo "$out"
+          printf '%s\n' "$out" | grep -qF "OWNTRACE $VERSION (" \
+            || { echo "::error::version output mismatch" ; fail=1 ; }
+          printf '%s\n' "$out" | grep -qF 'linux/amd64' \
+            || { echo "::error::platform output mismatch" ; fail=1 ; }
+          printf '%s\n' "$out" | grep -qF 'release-build-' \
+            || { echo "::error::commit marker missing in version output" ; fail=1 ; }
+          [ "$fail" -eq 0 ] || exit 1
+
+      - name: Produce source archives from the exact checked-out commit
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          echo "source archives from commit $commit"
+          # git archive builds from the committed tree only: identical to the
+          # checked-out working tree (checkout has no local modifications),
+          # and never includes dist/, .git/ or other untracked content.
+          git archive --format=tar.gz --prefix=owntrace/ \
+            -o "dist/owntrace-${VERSION}-source.tar.gz" HEAD
+          git archive --format=zip --prefix=owntrace/ \
+            -o "dist/owntrace-${VERSION}-source.zip" HEAD
+
+      - name: Verify source archive integrity and required files
+        run: |
+          set -euo pipefail
+          tarball="dist/owntrace-${VERSION}-source.tar.gz"
+          zipfile="dist/owntrace-${VERSION}-source.zip"
+          for a in "$tarball" "$zipfile"; do
+            test -s "$a" || { echo "::error::$a missing or empty" ; exit 1 ; }
+          done
+          required='owntrace/go.mod owntrace/go.sum owntrace/cmd/owntrace/main.go
+            owntrace/internal/version/version.go
+            owntrace/.github/workflows/ci.yml
+            owntrace/.github/workflows/release-build.yml
+            owntrace/scripts/build-release.sh owntrace/LICENSE owntrace/README.md
+            owntrace/CHANGELOG.md owntrace/SECURITY.md'
+          # capture listings once: no early-exit grep on a live pipe
+          tar_entries=$(tar -tzf "$tarball")
+          zip_entries=$(unzip -l "$zipfile")
+          for f in $required; do
+            printf '%s\n' "$tar_entries" | grep -qx "$f" \
+              || { echo "::error::$f missing from tar" ; exit 1 ; }
+            printf '%s\n' "$zip_entries" | grep -q " $f\$" \
+              || { echo "::error::$f missing from zip" ; exit 1 ; }
+          done
+          # the archived version constant must equal the requested version
+          version_go=$(tar -xzOf "$tarball" owntrace/internal/version/version.go)
+          printf '%s\n' "$version_go" | grep -qF "const Version = \"$VERSION\"" \
+            || { echo "::error::archive version constant mismatch" ; exit 1 ; }
+          # compile smoke from the extracted tarball
+          tmp=$(mktemp -d)
+          tar -xzf "$tarball" -C "$tmp"
+          (cd "$tmp/owntrace" && go build ./... )
+          rm -rf "$tmp"
+          echo "source archives verified"
+
+      - name: Generate and verify SHA256SUMS from final artifacts
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum owntrace-"$VERSION"-* | sort -k2 > SHA256SUMS
+          entries=$(grep -c . SHA256SUMS)
+          echo "manifest entries: $entries"
+          [ "$entries" -eq 7 ] \
+            || { echo "::error::expected 7 manifest entries (5 binaries + 2 archives), got $entries" ; exit 1 ; }
+          sha256sum -c SHA256SUMS
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: owntrace-${{ steps.validate.outputs.version }}-release
+          path: dist/*
+          if-no-files-found: error

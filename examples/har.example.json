@@ -1,0 +1,66 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": { "name": "browser-or-proxy", "version": "1.0" },
+    "entries": [
+      {
+        "startedDateTime": "2026-11-17T10:00:00.000Z",
+        "time": 42,
+        "request": {
+          "method": "GET",
+          "url": "https://api.example.com/api/v1/orders/o-1001",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            { "name": "Authorization", "value": "Bearer ey-replace-me" },
+            { "name": "X-Owntrace-Profile", "value": "userA" }
+          ],
+          "queryString": [],
+          "cookies": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "headers": [{ "name": "Content-Type", "value": "application/json" }],
+          "content": {
+            "size": 120,
+            "mimeType": "application/json",
+            "text": "{\"order\":{\"id\":\"o-1001\",\"owner\":\"alice\",\"item\":\"widget\",\"total\":100}}"
+          }
+        },
+        "cache": {},
+        "timings": { "send": 0, "wait": 40, "receive": 2 }
+      },
+      {
+        "startedDateTime": "2026-11-17T10:00:05.000Z",
+        "time": 51,
+        "request": {
+          "method": "GET",
+          "url": "https://api.example.com/api/v1/orders/o-1004",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            { "name": "Authorization", "value": "Bearer ey-replace-me-2" },
+            { "name": "X-Owntrace-Profile", "value": "userB" }
+          ],
+          "queryString": [],
+          "cookies": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "headers": [{ "name": "Content-Type", "value": "application/json" }],
+          "content": {
+            "size": 118,
+            "mimeType": "application/json",
+            "text": "{\"order\":{\"id\":\"o-1004\",\"owner\":\"bob\",\"item\":\"gadget\",\"total\":200}}"
+          }
+        },
+        "cache": {},
+        "timings": { "send": 0, "wait": 49, "receive": 2 }
+      }
+    ]
+  }
+}

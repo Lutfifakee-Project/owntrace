@@ -1,0 +1,51 @@
+# Build & test on pushes and PRs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: build, vet, test (race), format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:" $unformatted
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: build
+        run: go build -trimpath -o owntrace ./cmd/owntrace
+
+      - name: test (race)
+        run: go test -race -timeout 20m ./...
+
+      - name: benchmarks (smoke)
+        run: go test -run=NONE -bench=. -benchtime=1x ./internal/benchmarks/
+
+      - name: CLI smoke
+        run: |
+          ./owntrace version
+          ./owntrace help
+
+      - name: Packaging regression test (source archive hygiene)
+        run: bash scripts/test-build-release.sh

@@ -1,0 +1,32 @@
+# OWNTRACE demo credentials for the bundled vulnerable lab application.
+# SECRETS - never commit, keep chmod 600 (the scanner refuses broader perms).
+# Tokens are generated per lab run; the mockapp uses fixed tokens:
+#   alice -> tok-alice-fixed-lab-token
+#   bob   -> tok-bob-fixed-lab-token
+#   admin -> tok-admin-fixed-lab-token
+auth:
+  profiles:
+    - name: userA
+      type: bearer
+      token: "tok-alice-fixed-lab-token"
+      role: user
+      identity:
+        endpoint: "http://127.0.0.1:8099/api/v1/profile"
+        method: "GET"
+        field: "user.id"
+    - name: userB
+      type: bearer
+      token: "tok-bob-fixed-lab-token"
+      role: user
+      identity:
+        endpoint: "http://127.0.0.1:8099/api/v1/profile"
+        method: "GET"
+        field: "user.id"
+    - name: admin
+      type: bearer
+      token: "tok-admin-fixed-lab-token"
+      role: admin
+      identity:
+        endpoint: "http://127.0.0.1:8099/api/v1/profile"
+        method: "GET"
+        field: "user.id"

@@ -1,0 +1,87 @@
+# OWNTRACE demo configuration for the bundled vulnerable lab application.
+# Start it first:  go run ./cmd/mockapp --addr 127.0.0.1:8099
+version: 1
+
+session:
+  name: "vulnerable-demo"
+  output_dir: "./owntrace-data"
+  log_level: "info"
+
+scope:
+  targets:
+    - host: "127.0.0.1:8099"
+      schemes: ["http"]
+      include_paths: ["/"]
+      exclude_paths: []
+      allowed_methods: ["GET", "HEAD", "OPTIONS"]
+      max_requests: 500
+  global_allowed_methods: ["GET", "HEAD", "OPTIONS"]
+  allow_subdomains: false
+  max_requests_total: 1000
+  max_crawl_depth: 2
+  max_crawl_pages: 20
+
+limits:
+  rate_per_second: 20
+  concurrency: 4
+  request_timeout_seconds: 10
+  max_response_bytes: 2097152
+  max_redirects: 5
+  retries: 1
+
+auth:
+  require_distinct_identities: true
+
+discovery:
+  sources: ["url"]
+  seeds:
+    - "http://127.0.0.1:8099/api/v1/admin/stats"
+    - "http://127.0.0.1:8099/api/v1/admin/users/usr-alice"
+
+objects:
+  declared:
+    # Vulnerable horizontal IDOR
+    - {profile: userA, resource: order,       url: "http://127.0.0.1:8099/api/v1/orders/o-1001", identifiers: ["o-1001"]}
+    - {profile: userB, resource: order,       url: "http://127.0.0.1:8099/api/v1/orders/o-1004", identifiers: ["o-1004"]}
+    # Correctly protected
+    - {profile: userA, resource: invoice,     url: "http://127.0.0.1:8099/api/v1/invoices/inv-2001", identifiers: ["inv-2001"]}
+    # Authenticated IDOR (anonymous blocked)
+    - {profile: userA, resource: document,    url: "http://127.0.0.1:8099/api/v1/documents/doc-3001", identifiers: ["doc-3001"]}
+    # Fully anonymous object exposure
+    - {profile: userA, resource: receipt,     url: "http://127.0.0.1:8099/api/v1/receipts/r-6001", identifiers: ["r-6001"]}
+    # Cross-tenant breach
+    - {profile: userA, resource: tenant_file, url: "http://127.0.0.1:8099/api/v1/tenants/t-acme/files/f-9001", identifiers: ["f-9001"], tenant: "t-acme"}
+    # Nested vulnerable
+    - {profile: userA, resource: order_notes, url: "http://127.0.0.1:8099/api/v1/orders/o-1001/notes", identifiers: ["o-1001"]}
+    # Nested protected
+    - {profile: userB, resource: ws_report,   url: "http://127.0.0.1:8099/api/v1/workspaces/ws-2/reports/r-5002", identifiers: ["r-5002"]}
+    # Decoy (echoes the id, carries no object data)
+    - {profile: userA, resource: decoy,       url: "http://127.0.0.1:8099/api/v1/echo/o-1001", identifiers: ["o-1001"]}
+    # Cache artifact trap
+    - {profile: userA, resource: cached_doc,  url: "http://127.0.0.1:8099/api/v1/cached-docs/doc-3001", identifiers: ["doc-3001"]}
+    # In-scope redirect surface
+    - {profile: userA, resource: order,       url: "http://127.0.0.1:8099/redirect/orders/o-1001", identifiers: ["o-1001"]}
+    # Nested protected (payments under protected invoice)
+    - {profile: userA, resource: invoice_pay, url: "http://127.0.0.1:8099/api/v1/invoices/inv-2001/payments", identifiers: ["inv-2001"]}
+
+verification:
+  repeats: 2
+  require_identity_separation: true
+  cache_bust: true
+  anonymous_test: true
+  nested_test: true
+  vertical_test: true
+  admin_path_patterns: ["/admin", "admin/", "/internal/"]
+  min_owner_state_for_confirmed: "declared"
+
+safety:
+  dry_run: false
+  allow_write_methods: false
+  block_destructive_paths: true
+
+report:
+  formats: ["json", "markdown", "html", "csv"]
+  title: "OWNTRACE Vulnerable Demo Report"
+
+retention:
+  days: 30

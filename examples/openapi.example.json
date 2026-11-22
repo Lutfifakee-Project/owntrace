@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "OWNTRACE example API (fictional)",
+    "version": "1.0.0",
+    "description": "Example spec showing parameter, body and security mapping. Not a real service."
+  },
+  "servers": [{ "url": "https://api.example.com/api/v1" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "OrderInput": {
+        "type": "object",
+        "properties": {
+          "item": { "type": "string" },
+          "quantity": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "summary": "Fetch one order",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "o-1001" },
+          { "name": "verbose", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": { "200": { "description": "the order" } }
+      },
+      "post": {
+        "operationId": "createOrder",
+        "summary": "Create an order (write op — only with allow_write_methods)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderInput" } } }
+        },
+        "responses": { "201": { "description": "created" } }
+      }
+    },
+    "/invoices/{invoiceId}": {
+      "get": {
+        "operationId": "getInvoice",
+        "summary": "Fetch one invoice",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "invoiceId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "inv-2001" }
+        ],
+        "responses": { "200": { "description": "the invoice" } }
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "operationId": "adminStats",
+        "summary": "Privileged statistics",
+        "responses": { "200": { "description": "stats" } }
+      }
+    }
+  }
+}
