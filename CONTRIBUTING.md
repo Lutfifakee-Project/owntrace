@@ -9,6 +9,8 @@ Thank you for improving OWNTRACE. This project has one hard rule:
 
 ## Development setup
 
+Contributor builds are from a source checkout:
+
 ```bash
 git clone https://github.com/Lutfifakee-Project/owntrace.git
 cd owntrace
@@ -19,8 +21,54 @@ go vet ./...
 gofmt -l .   # must be empty
 ```
 
-Go ≥ 1.22. No external services are needed; all tests run against an
+The toolchain is pinned by `go.mod` (`go 1.27.4`): Go 1.21+ with the default
+`GOTOOLCHAIN=auto` downloads it automatically; with `GOTOOLCHAIN=local`, install
+Go 1.27.4 or newer first. No external services are needed; all tests run against an
 in-process mock application (`internal/mockapp`).
+
+### Building a local binary
+
+```bash
+go build -trimpath \
+  -ldflags "-s -w -X github.com/Lutfifakee-Project/owntrace/internal/version.Commit=$(git rev-parse --short HEAD)" \
+  -o owntrace ./cmd/owntrace
+./owntrace version
+# OWNTRACE 0.1.2 (<commit>, linux/amd64, go1.27.4)
+```
+
+`-trimpath` removes local paths from the binary; the `-ldflags` stamp records the
+commit so `owntrace version` is meaningful.
+
+### Reproducible builds
+
+With the same Go toolchain version, `go build -trimpath` is deterministic: the
+binary checksum depends only on the source tree contents and the stamped commit.
+
+```bash
+go build -trimpath -o a ./cmd/owntrace
+go build -trimpath -o b ./cmd/owntrace
+sha256sum a b   # identical
+```
+
+Module dependencies are pinned in `go.mod`; `go.sum` contains their hashes. The
+release workflow (`.github/workflows/release-build.yml`) additionally builds with
+`CGO_ENABLED=0 -trimpath -buildvcs=false` and a `release-build-<short-sha>` commit
+stamp; the official release binaries are the reproducible, checksummed artifacts.
+Users install via `go install` (see docs/installation.md) — the build steps here
+are for contributors only.
+
+### The lab application
+
+A deliberately vulnerable demo application ships with the repository for
+learning and for validating a build:
+
+```bash
+go run ./cmd/mockapp --addr 127.0.0.1:8099
+```
+
+It binds to loopback, holds three users (`alice`, `bob`, `admin`) and fixed
+test data. It is a **test fixture** — never expose it to a network you do not
+control.
 
 ## Workflow: CODING → CHECK → FIX → RECHECK
 

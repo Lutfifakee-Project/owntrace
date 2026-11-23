@@ -1,4 +1,4 @@
-// OWNTRACE — Automated Object Ownership & Authorization Testing.
+// OWNTRACE — Automated IDOR/BOLA Pentesting Tool for Web Applications and APIs.
 //
 // This binary is a thin entrypoint; all behavior lives in internal/cli.
 package main

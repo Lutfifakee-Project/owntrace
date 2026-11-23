@@ -1,13 +1,22 @@
 # OWNTRACE
 
-**Automated Object Ownership & Authorization Testing**
+**Automated IDOR/BOLA Pentesting Tool**
 
-*Discover. Compare. Verify.*
+*For Web Applications and APIs*
 
-OWNTRACE is a CLI-first, evidence-based security testing tool for **object-level
-authorization failures** — the class of vulnerabilities commonly known as IDOR
-(Insecure Direct Object Reference) and BOLA (Broken Object Level Authorization,
-API1 in the OWASP API Security Top 10).
+OWNTRACE is a specialized automated **IDOR/BOLA penetration testing** tool for
+web applications and APIs. Its core battery targets **object-level authorization
+failures** — the class of vulnerabilities commonly known as IDOR (Insecure Direct
+Object Reference) and BOLA (Broken Object Level Authorization, API1 in the OWASP
+API Security Top 10). Related authorization capabilities — BFLA, BOPLA, GraphQL
+authorization, cross-tenant access, nested resources and cache-served artifacts —
+are covered as secondary batteries of the same evidence-based engine.
+
+Scans operate strictly within what you configure: a deny-by-default scope engine
+bounds every request to authorized targets, tests run only against the
+authentication profiles you define, over the supported protocols (HTTP/HTTPS
+REST APIs and GraphQL). OWNTRACE claims no universal detection and no
+unrestricted autonomous coverage.
 
 It tests whether a web application actually enforces *who may access which
 object*, by comparing what **independent authentication profiles** can see —
@@ -41,26 +50,40 @@ reports `SUSPECTED` or `INCONCLUSIVE` — never a confident false positive.
 
 ## Installation
 
-### Requirements
-- Linux / macOS / Windows; ~50 MB disk; no database server (SQLite is embedded)
-
-### From source (Go ≥ 1.22)
+Install with a single command — no repository clone, no source navigation, no manual build:
 
 ```bash
-git clone https://github.com/Lutfifakee-Project/owntrace.git
-cd owntrace
-go build -trimpath -ldflags "-s -w -X github.com/Lutfifakee-Project/owntrace/internal/version.Commit=$(git rev-parse --short HEAD)" \
-  -o owntrace ./cmd/owntrace
-./owntrace version
+go install -v github.com/Lutfifakee-Project/owntrace/cmd/owntrace@latest
 ```
 
-### Verify the build
+Then verify:
+
 ```bash
-go vet ./... && go test ./...
+owntrace version
+owntrace help
 ```
 
-See [docs/installation.md](docs/installation.md) for build details and
-reproducibility notes.
+**Prerequisites** (details in [docs/installation.md](docs/installation.md)):
+
+- The `go` command on your `PATH`. OWNTRACE uses the Go 1.27.4 toolchain; Go 1.21+
+  with the default `GOTOOLCHAIN=auto` downloads it automatically on first use.
+- `GOBIN` (or `GOPATH/bin`, by default `~/go/bin`) on your `PATH`, so the shell
+  finds `owntrace` after installation.
+- Internet access for the module and toolchain downloads.
+- ~50 MB disk; no database server (SQLite is embedded).
+
+To pin an exact published version instead of the latest one:
+
+```bash
+go install -v github.com/Lutfifakee-Project/owntrace/cmd/owntrace@v0.1.2
+```
+
+### Prebuilt binaries (optional, no Go required)
+
+The [releases page](https://github.com/Lutfifakee-Project/owntrace/releases) publishes
+five platform binaries plus a `SHA256SUMS` manifest. Download the binary for your
+platform, verify it with `sha256sum -c SHA256SUMS`, make it executable, and put it on
+your `PATH` — see [docs/installation.md](docs/installation.md) for the walkthrough.
 
 ---
 
@@ -86,7 +109,9 @@ optional for deeper investigations.
 ### Guided lab walkthrough
 
 This walks through testing the bundled vulnerable laboratory application.
-All commands run from the repository root.
+All commands run from the repository root. The bundled lab requires a source
+checkout — see [CONTRIBUTING.md](CONTRIBUTING.md) for the developer build setup;
+installed users can point `owntrace init` at any authorized target instead.
 
 ```bash
 # 1. Start the deliberately vulnerable lab app (loopback only, test data only)
@@ -263,7 +288,7 @@ vulnerable and correctly protected endpoints:
 | Same identity in two profiles | both profiles → same `user.id` | testing **aborted** |
 | Unknown ownership | — | never **CONFIRMED** |
 
-Run the suite yourself: `go test ./...` (add `-race`).
+The full suite is a contributor gate — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -288,7 +313,7 @@ Run the suite yourself: `go test ./...` (add `-race`).
 
 | Document | Contents |
 |---|---|
-| [docs/installation.md](docs/installation.md) | Building, reproducibility, versioning |
+| [docs/installation.md](docs/installation.md) | Installing, upgrading, uninstalling |
 | [docs/cli.md](docs/cli.md) | Every command, flag and exit code |
 | [docs/configuration.md](docs/configuration.md) | Full configuration reference |
 | [docs/authentication.md](docs/authentication.md) | Profiles, secret hygiene, identity separation |

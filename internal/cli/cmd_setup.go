@@ -19,7 +19,7 @@ import (
 func Root() *Command {
 	return &Command{
 		Name:  "owntrace",
-		Short: "Automated Object Ownership & Authorization Testing (IDOR/BOLA)",
+		Short: "Automated IDOR/BOLA Pentesting Tool for Web Applications and APIs",
 		Long: "OWNTRACE discovers endpoints, maps object ownership to independent authentication " +
 			"profiles, and verifies object-level authorization with evidence-based controls. " +
 			"It is built for authorized security testing only: scope is deny-by-default, " +

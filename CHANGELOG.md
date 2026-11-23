@@ -4,6 +4,19 @@ All notable changes to OWNTRACE are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — Installation & Documentation Release (2026-11-22)
+
+A documentation and installation-experience release. No verification,
+confirmation, ownership, safety policy or dependency changed.
+
+### Added
+- **One-command installation.** `go install -v github.com/Lutfifakee-Project/owntrace/cmd/owntrace@latest` is now the primary installation path — no repository clone, no source navigation, no manual build. Version-pinned installation (`go install -v github.com/Lutfifakee-Project/owntrace/cmd/owntrace@v0.1.2`), in-place upgrades via the same `@latest` command, and the five-platform prebuilt release binaries remain documented alternatives.
+
+### Changed
+- **Correct toolchain and PATH requirements.** The documented requirement is the actual one: the Go 1.27.4 toolchain pinned by `go.mod`. Go 1.21 or newer with the default `GOTOOLCHAIN=auto` downloads it automatically on first use; `GOTOOLCHAIN=local` requires Go 1.27.4 or newer already installed. Installed executables land in `GOBIN` or `GOPATH/bin` (by default `~/go/bin`), which must be on `PATH`.
+- **Improved installation, upgrade and uninstall instructions.** Uninstall now distinguishes the installed executable from project-local `owntrace-data/` state and `owntrace.yaml`/`auth.yaml` configuration; upgrade documents the `owntrace doctor` configuration-schema check and the post-upgrade `owntrace results integrity` evidence re-verification.
+- **Clarified product identity.** OWNTRACE is documented as an automated IDOR/BOLA pentesting tool for web applications and APIs, with BFLA, BOPLA, GraphQL authorization, cross-tenant, nested-resource and cache analysis described as secondary capabilities. Documentation states plainly that scans operate strictly within the configured scope, identities and supported protocols, with no claim of universal detection or unrestricted autonomous coverage.
+
 ## [0.1.1] — Patch Release (2026-11-22)
 
 A reporting-correctness release. No verification, confirmation, ownership or
